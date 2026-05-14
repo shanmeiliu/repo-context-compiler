@@ -222,22 +222,67 @@ Potential models:
 
 ---
 
-# Example Usage
 
-## Generate context pack
+# How to Use This Tool
+
+## 1. Install dependencies
 
 ```bash
-repoctx pack .
+go mod tidy
+````
+
+## 2. Build the CLI
+
+```bash
+go build -o repoctx ./cmd/repoctx
 ```
 
-Outputs:
+This creates a local binary:
 
 ```text
-.ai-context/
-├── ai-context.json
-├── ai-context.md
-└── embeddings.db
+./repoctx
 ```
+
+## 3. Initialize the local database
+
+```bash
+./repoctx init
+```
+
+This creates the local `.repoctx/` folder and SQLite database.
+
+## 4. Generate an AI context pack
+
+```bash
+./repoctx pack .
+```
+
+This scans the current repository and generates AI-friendly context files.
+
+You should now see:
+
+```text
+.repoctx/
+├── repoctx.db
+├── ai-context.md
+└── ai-context.json
+```
+
+## 5. Use with ChatGPT or another coding LLM
+
+Open:
+
+```text
+.repoctx/ai-context.md
+```
+
+Paste it into your coding LLM and ask something like:
+
+```text
+I want to fix an OAuth redirect loop. Based on this context pack, what files do you need?
+```
+
+The LLM should then request only the relevant files instead of needing the entire repository.
 
 ---
 
