@@ -1,0 +1,33 @@
+# Generated local repo context
+.repoctx/
+
+# Go build output
+repoctx
+*.exe
+*.test
+*.out
+
+# Go workspace
+vendor/
+
+# SQLite temp files
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# macOS
+.DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Env
+.env
+
+# Coverage
+coverage.out
