@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	sqliteVec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	"github.com/shanmeiliu/repo-context-compiler/internal/parser"
 	"github.com/shanmeiliu/repo-context-compiler/internal/scanner"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -107,6 +108,42 @@ func UpsertFiles(database *sql.DB, files []scanner.FileInfo) error {
 
 	for _, file := range files {
 		if _, err := stmt.Exec(file.Path, file.Language, file.SizeBytes, file.SHA256); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func UpsertSymbols(database *sql.DB, symbols []parser.Symbol) error {
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO symbols (
+			file_path,
+			symbol_name,
+			kind,
+			summary
+		)
+		VALUES (?, ?, ?, '')
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, symbol := range symbols {
+		_, err := stmt.Exec(
+			symbol.FilePath,
+			symbol.Name,
+			symbol.Kind,
+		)
+
+		if err != nil {
 			return err
 		}
 	}
