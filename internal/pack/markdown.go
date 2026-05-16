@@ -10,7 +10,12 @@ import (
 	"github.com/shanmeiliu/repo-context-compiler/internal/scanner"
 )
 
-func WriteMarkdown(path string, files []scanner.FileInfo, symbols []parser.Symbol) error {
+func WriteMarkdown(
+	path string,
+	files []scanner.FileInfo,
+	symbols []parser.Symbol,
+	summaries map[string]string,
+) error {
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Path < files[j].Path
 	})
@@ -36,7 +41,15 @@ func WriteMarkdown(path string, files []scanner.FileInfo, symbols []parser.Symbo
 		b.WriteString(fmt.Sprintf("- Language: `%s`\n", file.Language))
 		b.WriteString(fmt.Sprintf("- Size: `%d bytes`\n", file.SizeBytes))
 		b.WriteString(fmt.Sprintf("- SHA256: `%s`\n\n", file.SHA256))
-		b.WriteString("Summary: _Not generated yet._\n\n")
+
+		summary := summaries[file.Path]
+		if summary == "" {
+			summary = "_Not generated yet._"
+		}
+
+		b.WriteString("Summary:\n\n")
+		b.WriteString(summary)
+		b.WriteString("\n\n")
 	}
 
 	b.WriteString("## Symbols\n\n")

@@ -14,18 +14,25 @@ type ContextPack struct {
 	SchemaVersion string             `json:"schema_version"`
 	GeneratedAt   string             `json:"generated_at"`
 	Files         []scanner.FileInfo `json:"files"`
-	Symbols       []Symbol           `json:"symbols"`
-}
-type Symbol struct {
-	FilePath string `json:"file_path"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	Language string `json:"language"`
+	Symbols       []parser.Symbol    `json:"symbols"`
+	Summaries     map[string]string  `json:"summaries"`
 }
 
-func WriteJSON(path string, files []scanner.FileInfo, symbols []parser.Symbol) error {
+func WriteJSON(
+	path string,
+	files []scanner.FileInfo,
+	symbols []parser.Symbol,
+	summaries map[string]string,
+) error {
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Path < files[j].Path
+	})
+
+	sort.Slice(symbols, func(i, j int) bool {
+		if symbols[i].FilePath == symbols[j].FilePath {
+			return symbols[i].Name < symbols[j].Name
+		}
+		return symbols[i].FilePath < symbols[j].FilePath
 	})
 
 	pack := ContextPack{
@@ -33,6 +40,7 @@ func WriteJSON(path string, files []scanner.FileInfo, symbols []parser.Symbol) e
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 		Files:         files,
 		Symbols:       symbols,
+		Summaries:     summaries,
 	}
 
 	data, err := json.MarshalIndent(pack, "", "  ")

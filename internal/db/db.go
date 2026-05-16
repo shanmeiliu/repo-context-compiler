@@ -11,6 +11,8 @@ import (
 	"github.com/shanmeiliu/repo-context-compiler/internal/scanner"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	repoctx "github.com/shanmeiliu/repo-context-compiler/internal"
 )
 
 func Open(path string) (*sql.DB, error) {
@@ -149,4 +151,57 @@ func UpsertSymbols(database *sql.DB, symbols []parser.Symbol) error {
 	}
 
 	return tx.Commit()
+}
+
+func UpsertFileSummaries(database *sql.DB, summaries []repoctx.FileSummary) error {
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		UPDATE files
+		SET summary = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE path = ?;
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, summary := range summaries {
+		if _, err := stmt.Exec(summary.Summary, summary.Path); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func GetFileSummaries(database *sql.DB) (map[string]string, error) {
+	rows, err := database.Query(`
+		SELECT path, summary
+		FROM files
+		WHERE summary IS NOT NULL AND summary != '';
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]string{}
+
+	for rows.Next() {
+		var path string
+		var summary string
+
+		if err := rows.Scan(&path, &summary); err != nil {
+			return nil, err
+		}
+
+		result[path] = summary
+	}
+
+	return result, rows.Err()
 }
