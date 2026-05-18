@@ -179,6 +179,43 @@ func UpsertFileSummaries(database *sql.DB, summaries []repoctx.FileSummary) erro
 	return tx.Commit()
 }
 
+type FileSummaryState struct {
+	Path       string
+	SHA256     string
+	HasSummary bool
+}
+
+func GetFileSummaryState(database *sql.DB) (map[string]FileSummaryState, error) {
+	rows, err := database.Query(`
+		SELECT path, sha256, summary
+		FROM files;
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]FileSummaryState{}
+
+	for rows.Next() {
+		var path string
+		var sha string
+		var summary string
+
+		if err := rows.Scan(&path, &sha, &summary); err != nil {
+			return nil, err
+		}
+
+		result[path] = FileSummaryState{
+			Path:       path,
+			SHA256:     sha,
+			HasSummary: summary != "",
+		}
+	}
+
+	return result, rows.Err()
+}
+
 func GetFileSummaries(database *sql.DB) (map[string]string, error) {
 	rows, err := database.Query(`
 		SELECT path, summary
