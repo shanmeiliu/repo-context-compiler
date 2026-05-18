@@ -2,7 +2,7 @@
 .repoctx/
 
 # Go build output
-repoctx
+/repoctx
 *.exe
 *.test
 *.out
