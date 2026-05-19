@@ -11,11 +11,12 @@ import (
 )
 
 type ContextPack struct {
-	SchemaVersion string             `json:"schema_version"`
-	GeneratedAt   string             `json:"generated_at"`
-	Files         []scanner.FileInfo `json:"files"`
-	Symbols       []parser.Symbol    `json:"symbols"`
-	Summaries     map[string]string  `json:"summaries"`
+	SchemaVersion string              `json:"schema_version"`
+	GeneratedAt   string              `json:"generated_at"`
+	Files         []scanner.FileInfo  `json:"files"`
+	Symbols       []parser.Symbol     `json:"symbols"`
+	Summaries     map[string]string   `json:"summaries"`
+	Dependencies  []parser.Dependency `json:"dependencies"`
 }
 
 func WriteJSON(

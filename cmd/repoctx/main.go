@@ -148,7 +148,10 @@ func main() {
 			if err := db.UpsertSymbols(database, symbols); err != nil {
 				log.Fatal(err)
 			}
-
+			deps := parseDependencies(repoPath, files)
+			if err := db.UpsertDependencies(database, deps); err != nil {
+				log.Fatal(err)
+			}
 			if summarize {
 				filesToSummarize := filterFilesNeedingSummaries(files, previousState)
 
@@ -264,4 +267,28 @@ func filterFilesNeedingSummaries(
 	}
 
 	return result
+}
+
+func parseDependencies(
+	repoPath string,
+	files []scanner.FileInfo,
+) []parser.Dependency {
+	var deps []parser.Dependency
+
+	for _, file := range files {
+		fullPath := filepath.Join(repoPath, file.Path)
+
+		parsed, err := parser.ParseDependencies(fullPath)
+		if err != nil {
+			continue
+		}
+
+		for i := range parsed {
+			parsed[i].Source = file.Path
+		}
+
+		deps = append(deps, parsed...)
+	}
+
+	return deps
 }

@@ -12,6 +12,14 @@ func parsePython(root *sitter.Node, content []byte, path string) []Symbol {
 	return symbols
 }
 
+func ExtractPythonDependencies(root *sitter.Node, content []byte, path string) []Dependency {
+	var deps []Dependency
+
+	walkPythonDependencies(root, content, path, &deps)
+
+	return deps
+}
+
 func walkPython(node *sitter.Node, content []byte, path string, symbols *[]Symbol) {
 	if node == nil {
 		return
@@ -45,5 +53,35 @@ func walkPython(node *sitter.Node, content []byte, path string, symbols *[]Symbo
 
 	for i := 0; i < int(node.ChildCount()); i++ {
 		walkPython(node.Child(i), content, path, symbols)
+	}
+}
+
+func walkPythonDependencies(
+	node *sitter.Node,
+	content []byte,
+	path string,
+	deps *[]Dependency,
+) {
+	if node == nil {
+		return
+	}
+
+	if node.Type() == "import_statement" ||
+		node.Type() == "import_from_statement" {
+
+		*deps = append(*deps, Dependency{
+			Source: path,
+			Target: node.Content(content),
+			Type:   "import",
+		})
+	}
+
+	for i := 0; i < int(node.ChildCount()); i++ {
+		walkPythonDependencies(
+			node.Child(i),
+			content,
+			path,
+			deps,
+		)
 	}
 }

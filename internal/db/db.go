@@ -33,6 +33,14 @@ func Open(path string) (*sql.DB, error) {
 func Migrate(database *sql.DB) error {
 	statements := []string{
 		`
+		CREATE TABLE IF NOT EXISTS dependencies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source TEXT NOT NULL,
+		target TEXT NOT NULL,
+		type TEXT NOT NULL
+		);
+		`,
+		`
 		CREATE TABLE IF NOT EXISTS files (
 			path TEXT PRIMARY KEY,
 			language TEXT,
@@ -85,6 +93,43 @@ func Migrate(database *sql.DB) error {
 	}
 
 	return nil
+}
+
+func UpsertDependencies(
+	database *sql.DB,
+	deps []parser.Dependency,
+) error {
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO dependencies (
+			source,
+			target,
+			type
+		)
+		VALUES (?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, dep := range deps {
+		_, err := stmt.Exec(
+			dep.Source,
+			dep.Target,
+			dep.Type,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func UpsertFiles(database *sql.DB, files []scanner.FileInfo) error {

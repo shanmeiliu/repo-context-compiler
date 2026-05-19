@@ -21,6 +21,63 @@ type Symbol struct {
 	Dependencies []string `json:"dependencies"`
 }
 
+func ParseDependencies(path string) (deps []Dependency, err error) {
+	defer func() {
+		if recover() != nil {
+			deps = nil
+			err = nil
+		}
+	}()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	var lang *sitter.Language
+
+	switch ext {
+	case ".py":
+		lang = python.GetLanguage()
+	default:
+		return nil, nil
+	}
+
+	if lang == nil {
+		return nil, nil
+	}
+
+	p := sitter.NewParser()
+	if p == nil {
+		return nil, nil
+	}
+
+	p.SetLanguage(lang)
+
+	tree, err := p.ParseCtx(context.Background(), nil, content)
+	if err != nil {
+		return nil, err
+	}
+
+	if tree == nil {
+		return nil, nil
+	}
+
+	root := tree.RootNode()
+	if root == nil {
+		return nil, nil
+	}
+
+	switch ext {
+	case ".py":
+		return ExtractPythonDependencies(root, content, path), nil
+	default:
+		return nil, nil
+	}
+}
+
 func ParseFile(path string) (symbols []Symbol, err error) {
 	// Defensive guard: tree-sitter is CGO-backed and can panic on bad parser state.
 	defer func() {
