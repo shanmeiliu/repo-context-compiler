@@ -11,6 +11,7 @@ import (
 	"github.com/shanmeiliu/repo-context-compiler/internal/llm"
 	"github.com/shanmeiliu/repo-context-compiler/internal/pack"
 	"github.com/shanmeiliu/repo-context-compiler/internal/parser"
+	"github.com/shanmeiliu/repo-context-compiler/internal/recommender"
 	"github.com/shanmeiliu/repo-context-compiler/internal/scanner"
 
 	"github.com/joho/godotenv"
@@ -26,6 +27,7 @@ func main() {
 	var llmBaseURL string
 	var llmAPIKey string
 	var llmModel string
+	var askLimit int
 
 	var rootCmd = &cobra.Command{
 		Use:   "repoctx",
@@ -77,7 +79,7 @@ func main() {
 
 	var scanCmd = &cobra.Command{
 		Use:   "scan [repo path]",
-		Short: "Scan repository files and symbols into local database",
+		Short: "Scan repository files, symbols, and dependencies into local database",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			repoPath := args[0]
@@ -102,13 +104,18 @@ func main() {
 			}
 
 			symbols := parseSymbols(repoPath, files)
-
 			if err := db.UpsertSymbols(database, symbols); err != nil {
+				log.Fatal(err)
+			}
+
+			deps := parseDependencies(repoPath, files)
+			if err := db.UpsertDependencies(database, deps); err != nil {
 				log.Fatal(err)
 			}
 
 			fmt.Printf("Scanned %d files\n", len(files))
 			fmt.Printf("Extracted %d symbols\n", len(symbols))
+			fmt.Printf("Extracted %d dependencies\n", len(deps))
 		},
 	}
 
@@ -144,14 +151,15 @@ func main() {
 			}
 
 			symbols := parseSymbols(repoPath, files)
-
 			if err := db.UpsertSymbols(database, symbols); err != nil {
 				log.Fatal(err)
 			}
+
 			deps := parseDependencies(repoPath, files)
 			if err := db.UpsertDependencies(database, deps); err != nil {
 				log.Fatal(err)
 			}
+
 			if summarize {
 				filesToSummarize := filterFilesNeedingSummaries(files, previousState)
 
@@ -202,9 +210,64 @@ func main() {
 		},
 	}
 
+	var askCmd = &cobra.Command{
+		Use:   "ask [task]",
+		Short: "Recommend relevant files for a task using the local context database",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			task := args[0]
+
+			database, err := db.Open(dbPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer database.Close()
+
+			if err := db.Migrate(database); err != nil {
+				log.Fatal(err)
+			}
+
+			files, err := db.GetFiles(database)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			symbols, err := db.GetSymbols(database)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			deps, err := db.GetDependencies(database)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			recs := recommender.RecommendFiles(task, files, symbols, deps, askLimit)
+
+			if len(recs) == 0 {
+				fmt.Println("No likely files found. Try running `repoctx pack . --summarize` first for better recommendations.")
+				return
+			}
+
+			fmt.Println("Likely relevant files:")
+			fmt.Println()
+
+			for _, rec := range recs {
+				fmt.Printf("- %s (score: %d)\n", rec.Path, rec.Score)
+
+				for _, reason := range rec.Reasons {
+					fmt.Printf("  - %s\n", reason)
+				}
+			}
+		},
+	}
+
+	askCmd.Flags().IntVar(&askLimit, "limit", 10, "Maximum number of files to recommend")
+
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(packCmd)
+	rootCmd.AddCommand(askCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -232,13 +295,28 @@ func parseSymbols(repoPath string, files []scanner.FileInfo) []parser.Symbol {
 	return symbols
 }
 
-func envOrDefault(key string, fallback string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
+func parseDependencies(
+	repoPath string,
+	files []scanner.FileInfo,
+) []parser.Dependency {
+	var deps []parser.Dependency
+
+	for _, file := range files {
+		fullPath := filepath.Join(repoPath, file.Path)
+
+		parsed, err := parser.ParseDependencies(fullPath)
+		if err != nil {
+			continue
+		}
+
+		for i := range parsed {
+			parsed[i].Source = file.Path
+		}
+
+		deps = append(deps, parsed...)
 	}
 
-	return value
+	return deps
 }
 
 func filterFilesNeedingSummaries(
@@ -269,26 +347,11 @@ func filterFilesNeedingSummaries(
 	return result
 }
 
-func parseDependencies(
-	repoPath string,
-	files []scanner.FileInfo,
-) []parser.Dependency {
-	var deps []parser.Dependency
-
-	for _, file := range files {
-		fullPath := filepath.Join(repoPath, file.Path)
-
-		parsed, err := parser.ParseDependencies(fullPath)
-		if err != nil {
-			continue
-		}
-
-		for i := range parsed {
-			parsed[i].Source = file.Path
-		}
-
-		deps = append(deps, parsed...)
+func envOrDefault(key string, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
 	}
 
-	return deps
+	return value
 }

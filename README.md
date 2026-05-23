@@ -87,7 +87,11 @@ without needing the entire codebase in context.
 * Generate repository tree structures
 * Parse source files into semantic representations
 * Generate AI-friendly compressed context packs
-* Support local LLMs through Ollama
+* Support local and remote OpenAI-compatible LLM providers
+* Support incremental semantic summarization
+* Build dependency graphs and import relationships
+* Recommend relevant files for tasks and bug fixes
+* Work fully offline without requiring any LLM
 * Reduce token usage for coding assistants
 * Help LLMs request only the files they actually need
 
@@ -143,7 +147,10 @@ repo-context-compiler
 │   └── extracts functions, classes, imports, exports
 │
 ├── summarize
-│   └── uses local LLMs to generate semantic metadata
+│   └── uses local or remote LLMs to generate semantic metadata
+│
+├── dependency graph
+│   └── builds architecture relationships between files
 │
 ├── index
 │   └── stores cached summaries and hashes
@@ -159,14 +166,14 @@ repo-context-compiler
 
 # Planned Technology Stack
 
-| Component  | Technology        |
-| ---------- | ----------------- |
-| Language   | Go                |
-| Parser     | tree-sitter       |
-| Local LLM  | Ollama            |
-| Cache DB   | SQLite            |
-| Embeddings | Ollama embeddings |
-| Output     | JSON + Markdown   |
+| Component     | Technology                   |
+| ------------- | ---------------------------- |
+| Language      | Go                           |
+| Parser        | tree-sitter                  |
+| LLM Providers | Ollama / OpenAI / OpenRouter |
+| Cache DB      | SQLite                       |
+| Embeddings    | Ollama embeddings            |
+| Output        | JSON + Markdown              |
 
 ---
 
@@ -186,17 +193,48 @@ without relying on fragile regex parsing.
 
 ---
 
+# Why OpenAI-Compatible Providers?
+
+The project uses a provider-agnostic OpenAI-compatible HTTP client.
+
+This allows support for:
+
+* Ollama
+* OpenAI
+* OpenRouter
+* Together.ai
+* Groq
+* local vLLM servers
+* LiteLLM gateways
+
+without requiring provider-specific implementations.
+
+Most modern providers support:
+
+```text
+POST /v1/chat/completions
+```
+
+This dramatically simplifies the architecture.
+
+The primary differences between providers become:
+
+* base URL
+* API key
+* model name
+
+---
+
 # Why Ollama?
 
-Ollama enables fully local workflows.
+Ollama is still the preferred local-first option because it enables:
 
-This project is intended to work offline and locally:
-
+* fully offline workflows
+* local summarization
+* local embeddings
+* privacy-first development
 * no cloud dependency
-* no repo upload
-* no privacy concerns
-* supports local embeddings
-* supports local summarization
+* no repository upload
 
 Potential models:
 
@@ -208,20 +246,104 @@ Potential models:
 
 ---
 
+# AI Providers Are Optional
+
+`repo-context-compiler` is designed as:
+
+```text
+core semantic repository compiler
++ optional AI augmentation
+```
+
+The core system works completely offline without:
+
+* OpenAI
+* OpenRouter
+* Ollama
+* API keys
+* internet access
+
+This is an intentional architectural decision.
+
+The repository compiler itself is responsible for:
+
+* repository scanning
+* tree generation
+* tree-sitter parsing
+* symbol extraction
+* dependency indexing
+* semantic structure generation
+* JSON context packs
+* Markdown context packs
+
+LLMs are only used for optional enhancements such as:
+
+* semantic summaries
+* architecture descriptions
+* side effect analysis
+* risk classification
+* embeddings
+* semantic search
+
+---
+
+# Offline-First Design
+
+The following command works entirely offline:
+
+```bash
+./repoctx pack .
+```
+
+This generates:
+
+```text
+.repoctx/
+├── repoctx.db
+├── ai-context.md
+└── ai-context.json
+```
+
+without requiring any LLM provider configuration.
+
+This makes the tool suitable for:
+
+* local development
+* secure environments
+* private repositories
+* air-gapped systems
+* CI pipelines
+* deterministic indexing
+
+---
+
+# AI-Enhanced Mode
+
+LLMs are enabled only when explicitly requested:
+
+```bash
+./repoctx pack . --summarize
+```
+
+This prevents AI providers from becoming a hard dependency.
+
+---
+
 # Core Workflow
 
 ```text
 1. Scan repository
-2. Parse code structure
-3. Build semantic summaries
-4. Store cached representations
-5. Generate compressed AI context pack
-6. Ask LLM what files it needs
-7. Provide only required source files
+2. Parse symbols and imports
+3. Build dependency graph
+4. Generate semantic summaries (optional)
+5. Cache summaries incrementally
+6. Store semantic representations locally
+7. Generate compressed AI context packs
+8. Ask the system what files are relevant
+9. Provide only necessary source files to frontier LLMs
 ```
 
 ---
-
 
 # How to Use This Tool
 
@@ -229,7 +351,7 @@ Potential models:
 
 ```bash
 go mod tidy
-````
+```
 
 ## 2. Build the CLI
 
@@ -268,7 +390,92 @@ You should now see:
 └── ai-context.json
 ```
 
-## 5. Use with ChatGPT or another coding LLM
+---
+
+# Optional: Generate Semantic Summaries
+
+By default the system works entirely offline without any LLM.
+
+To enable semantic file summaries:
+
+```bash
+./repoctx pack . --summarize
+```
+
+This adds:
+
+* file purpose summaries
+* dependency descriptions
+* side effect analysis
+* risk labeling
+* architectural notes
+
+into:
+
+* `ai-context.md`
+* `ai-context.json`
+
+Example summary:
+
+```text
+Purpose:
+Handles authentication session lifecycle.
+
+Dependencies:
+db, oauth provider, session middleware
+
+Risk:
+high
+```
+
+---
+
+# Incremental Summary Caching
+
+Summaries are cached by SHA256 file hash.
+
+Unchanged files are not re-summarized.
+
+This dramatically reduces:
+
+* LLM cost
+* local inference time
+* repeated processing
+
+Example:
+
+```text
+Generated 3 file summaries
+Reused 42 cached summaries
+```
+
+---
+
+# Example `.env`
+
+```env
+REPOCTX_LLM_BASE_URL=http://localhost:11434/v1
+REPOCTX_LLM_MODEL=qwen2.5-coder:7b
+REPOCTX_LLM_API_KEY=ollama
+```
+
+The `.env` file is optional.
+
+CLI flags override environment variables.
+
+Priority order:
+
+```text
+CLI flags
+↓
+.env values
+↓
+built-in defaults
+```
+
+---
+
+# Use with ChatGPT or Another Coding LLM
 
 Open:
 
@@ -283,6 +490,69 @@ I want to fix an OAuth redirect loop. Based on this context pack, what files do 
 ```
 
 The LLM should then request only the relevant files instead of needing the entire repository.
+
+---
+
+# Task-Aware File Recommendations
+
+The project includes an offline semantic recommendation engine.
+
+Example:
+
+```bash
+./repoctx ask "OAuth redirect loop after login"
+```
+
+Potential output:
+
+```text
+Likely relevant files:
+
+- backend/auth/routes.py
+- backend/auth/service.py
+- frontend/src/AuthProvider.tsx
+- nginx.conf
+```
+
+The recommendation system combines:
+
+* path analysis
+* symbol matching
+* semantic summaries
+* dependency relationships
+
+This helps determine which files should be sent to a frontier LLM.
+
+---
+
+# Why This Matters
+
+Instead of sending:
+
+```text
+entire repository
+```
+
+the workflow becomes:
+
+```text
+repository
+↓
+semantic compiler
+↓
+compressed context
+↓
+task-aware file selection
+↓
+frontier LLM
+```
+
+This significantly reduces:
+
+* token usage
+* retrieval noise
+* lost-in-the-middle failures
+* irrelevant context
 
 ---
 
@@ -450,6 +720,52 @@ The system should progressively expand detail only when needed.
 
 ---
 
+# Repository Intermediate Representation (Repository IR)
+
+The project increasingly behaves like a compiler pipeline:
+
+```text
+source code
+↓
+syntax trees
+↓
+symbols
+↓
+dependency graph
+↓
+semantic summaries
+↓
+compressed repository IR
+```
+
+This is conceptually similar to traditional compiler pipelines:
+
+```text
+source code
+↓
+AST
+↓
+IR
+↓
+machine code
+```
+
+The generated context packs act as:
+
+```text
+repository IR for AI systems
+```
+
+This enables:
+
+* scalable AI-assisted coding
+* architecture-aware retrieval
+* semantic compression
+* graph-aware reasoning
+* task-specific context assembly
+
+---
+
 # Planned Features
 
 ## MVP 1
@@ -584,8 +900,7 @@ The real solution is:
 # Example Future Query
 
 ```bash
-repoctx ask \
-  --task "OAuth redirect loop after login"
+./repoctx ask "OAuth redirect loop after login"
 ```
 
 Potential output:
@@ -618,4 +933,3 @@ Likely relevant files:
 # License
 
 MIT
-
