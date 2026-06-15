@@ -12,9 +12,11 @@ import (
 
 func WriteMarkdown(
 	path string,
+	repoName string,
 	files []scanner.FileInfo,
 	symbols []parser.Symbol,
 	summaries map[string]string,
+	dependencies []parser.Dependency,
 ) error {
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Path < files[j].Path
@@ -28,10 +30,7 @@ func WriteMarkdown(
 
 	b.WriteString("## Repository Tree\n\n")
 	b.WriteString("```text\n")
-	for _, file := range files {
-		b.WriteString(file.Path)
-		b.WriteString("\n")
-	}
+	writeRepositoryTree(&b, repoName, files)
 	b.WriteString("```\n\n")
 
 	b.WriteString("## Files\n\n")
@@ -75,5 +74,105 @@ func WriteMarkdown(
 		b.WriteString("\n")
 	}
 
+	b.WriteString("## Dependencies\n\n")
+
+	if len(dependencies) == 0 {
+		b.WriteString("_No dependencies detected._\n")
+	} else {
+		sort.Slice(dependencies, func(i, j int) bool {
+			if dependencies[i].Source != dependencies[j].Source {
+				return dependencies[i].Source < dependencies[j].Source
+			}
+			if dependencies[i].Target != dependencies[j].Target {
+				return dependencies[i].Target < dependencies[j].Target
+			}
+			return dependencies[i].Type < dependencies[j].Type
+		})
+
+		for _, dependency := range dependencies {
+			b.WriteString(fmt.Sprintf(
+				"- `%s` -> `%s` (`%s`)\n",
+				dependency.Source,
+				dependency.Target,
+				dependency.Type,
+			))
+		}
+	}
+
 	return os.WriteFile(path, []byte(b.String()), 0644)
+}
+
+type treeNode struct {
+	name     string
+	isFile   bool
+	children map[string]*treeNode
+}
+
+func writeRepositoryTree(
+	b *strings.Builder,
+	repoName string,
+	files []scanner.FileInfo,
+) {
+	root := &treeNode{children: map[string]*treeNode{}}
+
+	for _, file := range files {
+		parts := strings.Split(file.Path, "/")
+		current := root
+
+		for index, part := range parts {
+			child, exists := current.children[part]
+			if !exists {
+				child = &treeNode{
+					name:     part,
+					isFile:   index == len(parts)-1,
+					children: map[string]*treeNode{},
+				}
+				current.children[part] = child
+			}
+			current = child
+		}
+	}
+
+	if repoName == "" {
+		repoName = "."
+	}
+	b.WriteString(repoName)
+	b.WriteString("/\n")
+	writeTreeChildren(b, root, "")
+}
+
+func writeTreeChildren(b *strings.Builder, node *treeNode, prefix string) {
+	children := make([]*treeNode, 0, len(node.children))
+	for _, child := range node.children {
+		children = append(children, child)
+	}
+
+	sort.Slice(children, func(i, j int) bool {
+		if children[i].isFile != children[j].isFile {
+			return !children[i].isFile
+		}
+		return children[i].name < children[j].name
+	})
+
+	for index, child := range children {
+		last := index == len(children)-1
+		branch := "├── "
+		childPrefix := prefix + "│   "
+		if last {
+			branch = "└── "
+			childPrefix = prefix + "    "
+		}
+
+		b.WriteString(prefix)
+		b.WriteString(branch)
+		b.WriteString(child.name)
+		if !child.isFile {
+			b.WriteString("/")
+		}
+		b.WriteString("\n")
+
+		if !child.isFile {
+			writeTreeChildren(b, child, childPrefix)
+		}
+	}
 }

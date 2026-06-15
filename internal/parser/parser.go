@@ -10,6 +10,7 @@ import (
 	golang "github.com/smacker/go-tree-sitter/golang"
 	javascript "github.com/smacker/go-tree-sitter/javascript"
 	python "github.com/smacker/go-tree-sitter/python"
+	tsx "github.com/smacker/go-tree-sitter/typescript/tsx"
 	typescript "github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
@@ -36,15 +37,28 @@ func ParseDependencies(path string) (deps []Dependency, err error) {
 
 	ext := strings.ToLower(filepath.Ext(path))
 
-	var lang *sitter.Language
-
 	switch ext {
 	case ".py":
-		lang = python.GetLanguage()
+		return parseTreeDependencies(path, content, python.GetLanguage(), extractPythonDependencies)
+	case ".js", ".jsx":
+		return parseTreeDependencies(path, content, javascript.GetLanguage(), extractJavaScriptDependencies)
+	case ".ts":
+		return parseTreeDependencies(path, content, typescript.GetLanguage(), extractJavaScriptDependencies)
+	case ".tsx":
+		return parseTreeDependencies(path, content, tsx.GetLanguage(), extractJavaScriptDependencies)
+	case ".go":
+		return extractGoDependencies(path, content)
 	default:
 		return nil, nil
 	}
+}
 
+func parseTreeDependencies(
+	path string,
+	content []byte,
+	lang *sitter.Language,
+	extract func(*sitter.Node, []byte, string) []Dependency,
+) ([]Dependency, error) {
 	if lang == nil {
 		return nil, nil
 	}
@@ -70,12 +84,7 @@ func ParseDependencies(path string) (deps []Dependency, err error) {
 		return nil, nil
 	}
 
-	switch ext {
-	case ".py":
-		return ExtractPythonDependencies(root, content, path), nil
-	default:
-		return nil, nil
-	}
+	return extract(root, content, path), nil
 }
 
 func ParseFile(path string) (symbols []Symbol, err error) {
@@ -103,6 +112,8 @@ func ParseFile(path string) (symbols []Symbol, err error) {
 		lang = javascript.GetLanguage()
 	case ".ts":
 		lang = typescript.GetLanguage()
+	case ".tsx":
+		lang = tsx.GetLanguage()
 	case ".go":
 		lang = golang.GetLanguage()
 	default:
@@ -137,7 +148,7 @@ func ParseFile(path string) (symbols []Symbol, err error) {
 	switch ext {
 	case ".py":
 		return parsePython(root, content, path), nil
-	case ".js", ".jsx", ".ts":
+	case ".js", ".jsx", ".ts", ".tsx":
 		return parseJavaScript(root, content, path), nil
 	case ".go":
 		return parseGo(root, content, path), nil

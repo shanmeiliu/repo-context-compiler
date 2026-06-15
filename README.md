@@ -391,6 +391,165 @@ You should now see:
 ```
 
 ---
+# Build, Test, and Verify
+
+## Run Tests
+
+Execute all unit tests:
+
+```bash
+go test ./...
+```
+
+Run static analysis:
+
+```bash
+go vet ./...
+```
+
+## Build
+
+Build the CLI:
+
+```bash
+go build -o repoctx ./cmd/repoctx
+```
+
+This creates:
+
+```text
+./repoctx
+```
+
+## Generate a Context Pack
+
+Generate a context pack for the current repository:
+
+```bash
+./repoctx pack .
+```
+
+Expected output:
+
+```text
+Generated: .repoctx/ai-context.md
+Generated: .repoctx/ai-context.json
+```
+
+Generated artifacts:
+
+```text
+.repoctx/
+├── repoctx.db
+├── ai-context.md
+└── ai-context.json
+```
+
+## Generate Semantic Summaries (Optional)
+
+Enable LLM-powered semantic summaries:
+
+```bash
+./repoctx pack . --summarize
+```
+
+Example output:
+
+```text
+Generated 5 file summaries
+Reused 42 cached summaries
+Generated: .repoctx/ai-context.md
+Generated: .repoctx/ai-context.json
+```
+
+Summaries are cached using SHA256 file hashes. Unchanged files are not re-summarized.
+
+## Inspect Generated Context
+
+View repository metadata:
+
+```bash
+cat .repoctx/ai-context.md
+```
+
+Inspect generated JSON:
+
+```bash
+jq 'keys' .repoctx/ai-context.json
+```
+
+Inspect dependency relationships:
+
+```bash
+jq '.dependencies[:10]' .repoctx/ai-context.json
+```
+
+Inspect extracted symbols:
+
+```bash
+jq '.symbols[:10]' .repoctx/ai-context.json
+```
+
+## Ask for Relevant Files
+
+Use the local recommendation engine to identify files related to a task:
+
+```bash
+./repoctx ask "markdown tree output"
+```
+
+Example output:
+
+```text
+Likely relevant files:
+
+- internal/pack/markdown.go
+  - path matches task term: markdown
+
+- internal/scanner/scanner.go
+  - dependency neighbor of internal/pack/markdown.go
+```
+
+This command uses:
+
+* file paths
+* extracted symbols
+* dependency relationships
+* semantic summaries (if available)
+
+to recommend files that should be reviewed or provided to an LLM.
+
+## Typical Development Workflow
+
+```bash
+go test ./...
+go vet ./...
+go build -o repoctx ./cmd/repoctx
+
+./repoctx pack .
+
+./repoctx ask "OAuth redirect loop"
+./repoctx ask "add markdown output"
+./repoctx ask "summary caching"
+```
+
+## Typical AI-Assisted Workflow
+
+```text
+1. Generate ai-context.md
+
+2. Ask repoctx which files are relevant
+
+3. Provide only those files to ChatGPT, Claude, or another coding assistant
+
+4. Implement the change
+
+5. Regenerate the context pack
+```
+
+This minimizes token usage while maximizing architecture awareness.
+
+---
 
 # Optional: Generate Semantic Summaries
 

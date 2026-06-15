@@ -23,9 +23,13 @@ func RecommendFiles(
 	taskTerms := tokenize(task)
 
 	symbolsByFile := map[string][]db.SymbolRecord{}
+	knownFiles := map[string]bool{}
 
 	for _, symbol := range symbols {
 		symbolsByFile[symbol.FilePath] = append(symbolsByFile[symbol.FilePath], symbol)
+	}
+	for _, file := range files {
+		knownFiles[file.Path] = true
 	}
 
 	recs := map[string]*Recommendation{}
@@ -73,9 +77,9 @@ func RecommendFiles(
 	for _, dep := range deps {
 		sourceRec, sourceMatched := recs[dep.Source]
 		if sourceMatched {
-			targetPath := normalizeDependencyTarget(dep.Target)
+			targetPath := strings.TrimSpace(dep.Target)
 
-			if targetPath != "" {
+			if knownFiles[targetPath] {
 				rec, ok := recs[targetPath]
 				if !ok {
 					rec = &Recommendation{
@@ -178,16 +182,4 @@ func dedupe(items []string) []string {
 	}
 
 	return result
-}
-
-func normalizeDependencyTarget(target string) string {
-	target = strings.TrimSpace(target)
-
-	if target == "" {
-		return ""
-	}
-
-	// For now dependencies may be raw import statements.
-	// Later we can resolve imports to actual file paths.
-	return target
 }

@@ -24,6 +24,7 @@ func WriteJSON(
 	files []scanner.FileInfo,
 	symbols []parser.Symbol,
 	summaries map[string]string,
+	dependencies []parser.Dependency,
 ) error {
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Path < files[j].Path
@@ -36,12 +37,26 @@ func WriteJSON(
 		return symbols[i].FilePath < symbols[j].FilePath
 	})
 
+	if dependencies == nil {
+		dependencies = []parser.Dependency{}
+	}
+	sort.Slice(dependencies, func(i, j int) bool {
+		if dependencies[i].Source != dependencies[j].Source {
+			return dependencies[i].Source < dependencies[j].Source
+		}
+		if dependencies[i].Target != dependencies[j].Target {
+			return dependencies[i].Target < dependencies[j].Target
+		}
+		return dependencies[i].Type < dependencies[j].Type
+	})
+
 	pack := ContextPack{
 		SchemaVersion: "0.1.0",
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 		Files:         files,
 		Symbols:       symbols,
 		Summaries:     summaries,
+		Dependencies:  dependencies,
 	}
 
 	data, err := json.MarshalIndent(pack, "", "  ")

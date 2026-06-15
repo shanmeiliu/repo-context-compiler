@@ -41,23 +41,35 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(
 		&llmBaseURL,
 		"llm-base-url",
-		envOrDefault("REPOCTX_LLM_BASE_URL", "http://localhost:11434/v1"),
-		"OpenAI-compatible LLM base URL",
+		"",
+		"OpenAI-compatible LLM base URL (env: REPOCTX_LLM_BASE_URL)",
 	)
 
 	rootCmd.PersistentFlags().StringVar(
 		&llmAPIKey,
 		"llm-api-key",
-		envOrDefault("REPOCTX_LLM_API_KEY", ""),
-		"LLM API key",
+		"",
+		"LLM API key (env: REPOCTX_LLM_API_KEY)",
 	)
 
 	rootCmd.PersistentFlags().StringVar(
 		&llmModel,
 		"llm-model",
-		envOrDefault("REPOCTX_LLM_MODEL", "qwen2.5-coder:7b"),
-		"LLM model",
+		"",
+		"LLM model (env: REPOCTX_LLM_MODEL)",
 	)
+
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if !rootCmd.PersistentFlags().Changed("llm-base-url") {
+			llmBaseURL = envOrDefault("REPOCTX_LLM_BASE_URL", "http://localhost:11434/v1")
+		}
+		if !rootCmd.PersistentFlags().Changed("llm-api-key") {
+			llmAPIKey = envOrDefault("REPOCTX_LLM_API_KEY", "")
+		}
+		if !rootCmd.PersistentFlags().Changed("llm-model") {
+			llmModel = envOrDefault("REPOCTX_LLM_MODEL", "qwen2.5-coder:7b")
+		}
+	}
 
 	var initCmd = &cobra.Command{
 		Use:   "init",
@@ -99,17 +111,11 @@ func main() {
 				log.Fatal(err)
 			}
 
-			if err := db.UpsertFiles(database, files); err != nil {
-				log.Fatal(err)
-			}
-
 			symbols := parseSymbols(repoPath, files)
-			if err := db.UpsertSymbols(database, symbols); err != nil {
-				log.Fatal(err)
-			}
-
 			deps := parseDependencies(repoPath, files)
-			if err := db.UpsertDependencies(database, deps); err != nil {
+			deps = parser.ResolveDependencies(repoPath, files, deps)
+
+			if err := db.ReplaceRepositoryState(database, files, symbols, deps); err != nil {
 				log.Fatal(err)
 			}
 
@@ -146,17 +152,11 @@ func main() {
 				log.Fatal(err)
 			}
 
-			if err := db.UpsertFiles(database, files); err != nil {
-				log.Fatal(err)
-			}
-
 			symbols := parseSymbols(repoPath, files)
-			if err := db.UpsertSymbols(database, symbols); err != nil {
-				log.Fatal(err)
-			}
-
 			deps := parseDependencies(repoPath, files)
-			if err := db.UpsertDependencies(database, deps); err != nil {
+			deps = parser.ResolveDependencies(repoPath, files, deps)
+
+			if err := db.ReplaceRepositoryState(database, files, symbols, deps); err != nil {
 				log.Fatal(err)
 			}
 
@@ -197,11 +197,23 @@ func main() {
 				log.Fatal(err)
 			}
 
-			if err := pack.WriteMarkdown(outDir+"/ai-context.md", files, symbols, summaries); err != nil {
+			repoName := filepath.Base(repoPath)
+			if absoluteRepoPath, err := filepath.Abs(repoPath); err == nil {
+				repoName = filepath.Base(absoluteRepoPath)
+			}
+
+			if err := pack.WriteMarkdown(
+				outDir+"/ai-context.md",
+				repoName,
+				files,
+				symbols,
+				summaries,
+				deps,
+			); err != nil {
 				log.Fatal(err)
 			}
 
-			if err := pack.WriteJSON(outDir+"/ai-context.json", files, symbols, summaries); err != nil {
+			if err := pack.WriteJSON(outDir+"/ai-context.json", files, symbols, summaries, deps); err != nil {
 				log.Fatal(err)
 			}
 

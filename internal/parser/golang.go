@@ -1,6 +1,10 @@
 package parser
 
 import (
+	goparser "go/parser"
+	"go/token"
+	"strconv"
+
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -65,4 +69,28 @@ func walkGo(node *sitter.Node, content []byte, path string, symbols *[]Symbol) {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		walkGo(node.Child(i), content, path, symbols)
 	}
+}
+
+func extractGoDependencies(path string, content []byte) ([]Dependency, error) {
+	file, err := goparser.ParseFile(token.NewFileSet(), path, content, goparser.ImportsOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	deps := make([]Dependency, 0, len(file.Imports))
+
+	for _, spec := range file.Imports {
+		target, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+
+		deps = append(deps, Dependency{
+			Source: path,
+			Target: target,
+			Type:   "go_import",
+		})
+	}
+
+	return deps, nil
 }

@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Client struct {
-	BaseURL string
-	APIKey  string
-	Model   string
+	BaseURL    string
+	APIKey     string
+	Model      string
+	HTTPClient *http.Client
 }
 
 type ChatMessage struct {
@@ -38,6 +40,9 @@ func NewClient(baseURL, apiKey, model string) *Client {
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		APIKey:  apiKey,
 		Model:   model,
+		HTTPClient: &http.Client{
+			Timeout: 2 * time.Minute,
+		},
 	}
 }
 
@@ -76,7 +81,12 @@ func (c *Client) Generate(prompt string) (string, error) {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := c.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 2 * time.Minute}
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}

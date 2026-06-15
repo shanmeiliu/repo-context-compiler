@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strings"
+
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -12,7 +14,7 @@ func parsePython(root *sitter.Node, content []byte, path string) []Symbol {
 	return symbols
 }
 
-func ExtractPythonDependencies(root *sitter.Node, content []byte, path string) []Dependency {
+func extractPythonDependencies(root *sitter.Node, content []byte, path string) []Dependency {
 	var deps []Dependency
 
 	walkPythonDependencies(root, content, path, &deps)
@@ -66,14 +68,35 @@ func walkPythonDependencies(
 		return
 	}
 
-	if node.Type() == "import_statement" ||
-		node.Type() == "import_from_statement" {
+	switch node.Type() {
+	case "import_statement":
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			child := node.NamedChild(i)
+			target := pythonImportName(child, content)
+			appendDependency(deps, path, target, "python_import")
+		}
+	case "import_from_statement":
+		module := node.ChildByFieldName("module_name")
+		if module != nil {
+			moduleName := module.Content(content)
+			appendDependency(deps, path, moduleName, "python_import")
 
-		*deps = append(*deps, Dependency{
-			Source: path,
-			Target: node.Content(content),
-			Type:   "import",
-		})
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				child := node.NamedChild(i)
+				if child == nil ||
+					(child.StartByte() == module.StartByte() && child.EndByte() == module.EndByte()) {
+					continue
+				}
+
+				importedName := pythonImportName(child, content)
+				if importedName == "" {
+					continue
+				}
+
+				target := strings.TrimSuffix(moduleName, ".") + "." + importedName
+				appendDependency(deps, path, target, "python_import")
+			}
+		}
 	}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -84,4 +107,31 @@ func walkPythonDependencies(
 			deps,
 		)
 	}
+}
+
+func pythonImportName(node *sitter.Node, content []byte) string {
+	if node == nil {
+		return ""
+	}
+
+	if node.Type() == "aliased_import" {
+		name := node.ChildByFieldName("name")
+		if name != nil {
+			return name.Content(content)
+		}
+	}
+
+	return node.Content(content)
+}
+
+func appendDependency(deps *[]Dependency, source, target, dependencyType string) {
+	if target == "" {
+		return
+	}
+
+	*deps = append(*deps, Dependency{
+		Source: source,
+		Target: target,
+		Type:   dependencyType,
+	})
 }
